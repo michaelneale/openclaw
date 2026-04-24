@@ -46,6 +46,7 @@ export type MatrixVerificationSummary = {
   };
   hasReciprocateQr: boolean;
   completed: boolean;
+  autoConfirmedSasWithoutTrust?: boolean;
   error?: string;
   createdAt: string;
   updatedAt: string;
@@ -129,6 +130,7 @@ type MatrixVerificationSession = {
   startRequested: boolean;
   acceptRequested: boolean;
   sasAutoConfirmStarted: boolean;
+  sasAutoConfirmedWithoutTrust: boolean;
   sasAutoConfirmTimer?: ReturnType<typeof setTimeout>;
   sasCallbacks?: MatrixShowSasCallbacks;
   reciprocateQrCallbacks?: MatrixShowQrCodeCallbacks;
@@ -316,6 +318,7 @@ export class MatrixVerificationManager {
         : undefined,
       hasReciprocateQr: Boolean(session.reciprocateQrCallbacks),
       completed: phase === VerificationPhase.Done,
+      autoConfirmedSasWithoutTrust: session.sasAutoConfirmedWithoutTrust || undefined,
       error: session.error,
       createdAt: new Date(session.createdAtMs).toISOString(),
       updatedAt: new Date(session.updatedAtMs).toISOString(),
@@ -506,6 +509,11 @@ export class MatrixVerificationManager {
       session.sasAutoConfirmStarted = true;
       void this.confirmSasForSession(session, callbacks, { trustOwnDevice: false })
         .then(() => {
+          if (
+            this.readRequestValue(session.request, () => session.request.isSelfVerification, false)
+          ) {
+            session.sasAutoConfirmedWithoutTrust = true;
+          }
           this.touchVerificationSession(session);
         })
         .catch((err) => {
@@ -601,6 +609,7 @@ export class MatrixVerificationManager {
       startRequested: false,
       acceptRequested: false,
       sasAutoConfirmStarted: false,
+      sasAutoConfirmedWithoutTrust: false,
     };
     this.verificationSessions.set(session.id, session);
     this.ensureVerificationRequestTracked(session);

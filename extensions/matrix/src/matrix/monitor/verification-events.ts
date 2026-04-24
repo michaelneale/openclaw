@@ -24,6 +24,8 @@ type MatrixVerificationSummaryLike = {
   pending?: boolean;
   phase?: number;
   phaseName?: string;
+  isSelfVerification?: boolean;
+  autoConfirmedSasWithoutTrust?: boolean;
   sas?: {
     decimal?: [number, number, number];
     emoji?: Array<[string, string]>;
@@ -156,6 +158,19 @@ function formatVerificationSasNotice(summary: MatrixVerificationSummaryLike): st
   }
   lines.push("If both sides match, choose 'They match' in your Matrix app.");
   return lines.join("\n");
+}
+
+function formatAutoConfirmedSelfVerificationTrustNotice(
+  summary: MatrixVerificationSummaryLike,
+): string | null {
+  if (!summary.isSelfVerification || !summary.autoConfirmedSasWithoutTrust) {
+    return null;
+  }
+  return [
+    `Matrix self-verification SAS with ${summary.otherUserId} was auto-confirmed.`,
+    "Device identity trust is still incomplete.",
+    "Run openclaw matrix verify self and confirm the SAS from another Matrix client to cross-sign this device.",
+  ].join("\n");
 }
 
 function resolveVerificationFlowCandidates(params: {
@@ -394,6 +409,7 @@ export function createMatrixVerificationEventRouter(params: {
   const routerStartedAtMs = Date.now();
   const routedVerificationEvents = new Set<string>();
   const routedVerificationSasFingerprints = new Set<string>();
+  const routedVerificationTrustFingerprints = new Set<string>();
   const routedVerificationStageNotices = new Set<string>();
   const verificationFlowRooms = new Map<string, string>();
   const verificationUserRooms = new Map<string, string>();
@@ -488,7 +504,8 @@ export function createMatrixVerificationEventRouter(params: {
 
   async function routeVerificationSummary(summary: MatrixVerificationSummaryLike): Promise<void> {
     const roomId = await resolveSummaryRoomId(summary);
-    if (!roomId || !isActiveVerificationSummary(summary)) {
+    const trustNotice = formatAutoConfirmedSelfVerificationTrustNotice(summary);
+    if (!roomId || (!isActiveVerificationSummary(summary) && !trustNotice)) {
       return;
     }
     if (
@@ -517,20 +534,34 @@ export function createMatrixVerificationEventRouter(params: {
     ) {
       return;
     }
-    const sasNotice = formatVerificationSasNotice(summary);
-    if (!sasNotice) {
+    const sasNotice = isActiveVerificationSummary(summary)
+      ? formatVerificationSasNotice(summary)
+      : null;
+    const notices: string[] = [];
+    if (sasNotice) {
+      const sasFingerprint = `${summary.id}:${JSON.stringify(summary.sas)}`;
+      if (trackBounded(routedVerificationSasFingerprints, sasFingerprint)) {
+        notices.push(sasNotice);
+      }
+    }
+    if (trustNotice) {
+      const trustFingerprint = `${summary.id}:auto-confirmed-without-trust`;
+      if (trackBounded(routedVerificationTrustFingerprints, trustFingerprint)) {
+        notices.push(trustNotice);
+      }
+    }
+    if (notices.length === 0) {
       return;
     }
-    const sasFingerprint = `${summary.id}:${JSON.stringify(summary.sas)}`;
-    if (!trackBounded(routedVerificationSasFingerprints, sasFingerprint)) {
-      return;
+
+    for (const body of notices) {
+      await sendVerificationNotice({
+        client: params.client,
+        roomId,
+        body,
+        logVerboseMessage: params.logVerboseMessage,
+      });
     }
-    await sendVerificationNotice({
-      client: params.client,
-      roomId,
-      body: sasNotice,
-      logVerboseMessage: params.logVerboseMessage,
-    });
   }
 
   function routeVerificationEvent(roomId: string, event: MatrixRawEvent): boolean {

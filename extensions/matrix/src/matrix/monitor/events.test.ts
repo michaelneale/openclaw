@@ -671,6 +671,69 @@ describe("registerMatrixMonitorEvents verification routing", () => {
     expect(body).toContain("SAS decimal: 6158 1986 3513");
   });
 
+  it("posts explicit trust guidance after auto-confirmed self SAS", async () => {
+    const { sendMessage, verificationSummaryListener, flushTasks } = createHarness({
+      joinedMembersByRoom: {
+        "!dm:example.org": ["@alice:example.org", "@bot:example.org"],
+      },
+    });
+    if (!verificationSummaryListener) {
+      throw new Error("verification.summary listener was not registered");
+    }
+
+    verificationSummaryListener({
+      id: "verification-auto-confirmed-self",
+      roomId: "!dm:example.org",
+      otherUserId: "@alice:example.org",
+      isSelfVerification: true,
+      initiatedByMe: false,
+      phase: 4,
+      phaseName: "done",
+      pending: false,
+      methods: ["m.sas.v1"],
+      canAccept: false,
+      hasSas: true,
+      sas: {
+        decimal: [6158, 1986, 3513],
+      },
+      hasReciprocateQr: false,
+      completed: true,
+      autoConfirmedSasWithoutTrust: true,
+      createdAt: new Date("2026-02-25T21:42:54.000Z").toISOString(),
+      updatedAt: new Date("2026-02-25T21:42:55.000Z").toISOString(),
+    });
+    verificationSummaryListener({
+      id: "verification-auto-confirmed-self",
+      roomId: "!dm:example.org",
+      otherUserId: "@alice:example.org",
+      isSelfVerification: true,
+      initiatedByMe: false,
+      phase: 4,
+      phaseName: "done",
+      pending: false,
+      methods: ["m.sas.v1"],
+      canAccept: false,
+      hasSas: true,
+      sas: {
+        decimal: [6158, 1986, 3513],
+      },
+      hasReciprocateQr: false,
+      completed: true,
+      autoConfirmedSasWithoutTrust: true,
+      createdAt: new Date("2026-02-25T21:42:54.000Z").toISOString(),
+      updatedAt: new Date("2026-02-25T21:42:56.000Z").toISOString(),
+    });
+
+    await flushTasks();
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    const body = getSentNoticeBody(sendMessage, 0);
+    expect(body).toContain(
+      "Matrix self-verification SAS with @alice:example.org was auto-confirmed.",
+    );
+    expect(body).toContain("Device identity trust is still incomplete.");
+    expect(body).toContain("Run openclaw matrix verify self");
+  });
+
   it("blocks summary SAS notices when dmPolicy allowlist would block the sender", async () => {
     const { sendMessage, verificationSummaryListener, logVerboseMessage, flushTasks } =
       createHarness({

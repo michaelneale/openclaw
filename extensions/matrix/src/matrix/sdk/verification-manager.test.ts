@@ -9,6 +9,7 @@ import {
   type MatrixShowQrCodeCallbacks,
   type MatrixShowSasCallbacks,
   type MatrixVerificationRequestLike,
+  type MatrixVerificationSummary,
   type MatrixVerifierLike,
 } from "./verification-manager.js";
 
@@ -536,12 +537,15 @@ describe("MatrixVerificationManager", () => {
     });
     try {
       const manager = new MatrixVerificationManager({ trustOwnDeviceAfterSas });
+      const summaries: MatrixVerificationSummary[] = [];
+      manager.onSummaryChanged((summary) => summaries.push(summary));
       manager.trackVerificationRequest(request);
 
       await vi.advanceTimersByTimeAsync(30_100);
 
       expect(confirm).toHaveBeenCalledTimes(1);
       expect(trustOwnDeviceAfterSas).not.toHaveBeenCalled();
+      expect(summaries.at(-1)?.autoConfirmedSasWithoutTrust).toBe(true);
     } finally {
       vi.useRealTimers();
     }
