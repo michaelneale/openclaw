@@ -705,6 +705,20 @@ describe("matrix CLI verification commands", () => {
     });
   });
 
+  it("prints post-SAS trust warnings after confirmation", async () => {
+    confirmMatrixVerificationSasMock.mockResolvedValue(
+      mockMatrixVerificationSummary({
+        id: "in-1",
+        postSasTrustError: "cross-sign unavailable",
+      }),
+    );
+    const program = buildProgram();
+
+    await program.parseAsync(["matrix", "verify", "confirm-sas", "in-1"], { from: "user" });
+
+    expect(consoleLogMock).toHaveBeenCalledWith("Post-SAS trust warning: cross-sign unavailable");
+  });
+
   it("sets non-zero exit code for bootstrap failures in JSON mode", async () => {
     bootstrapMatrixVerificationMock.mockResolvedValue({
       success: false,

@@ -47,6 +47,7 @@ export type MatrixVerificationSummary = {
   hasReciprocateQr: boolean;
   completed: boolean;
   autoConfirmedSasWithoutTrust?: boolean;
+  postSasTrustError?: string;
   error?: string;
   createdAt: string;
   updatedAt: string;
@@ -131,6 +132,8 @@ type MatrixVerificationSession = {
   acceptRequested: boolean;
   sasAutoConfirmStarted: boolean;
   sasAutoConfirmedWithoutTrust: boolean;
+  boundOtherDeviceId?: string;
+  postSasTrustError?: string;
   sasAutoConfirmTimer?: ReturnType<typeof setTimeout>;
   sasCallbacks?: MatrixShowSasCallbacks;
   reciprocateQrCallbacks?: MatrixShowQrCodeCallbacks;
@@ -189,7 +192,7 @@ export class MatrixVerificationManager {
       transactionId: this.readRequestValue(request, () => request.transactionId?.trim() ?? "", ""),
       roomId: this.readRequestValue(request, () => request.roomId ?? "", ""),
       otherUserId: this.readRequestValue(request, () => request.otherUserId, ""),
-      otherDeviceId: this.readRequestValue(request, () => request.otherDeviceId ?? "", ""),
+      otherDeviceId: this.readRequestValue(request, () => request.otherDeviceId?.trim() ?? "", ""),
       isSelfVerification: this.readRequestValue(request, () => request.isSelfVerification, false),
       initiatedByMe: this.readRequestValue(request, () => request.initiatedByMe, false),
     };
@@ -214,6 +217,25 @@ export class MatrixVerificationManager {
 
   private isSameOptionalIdentityValue(left: string, right: string): boolean {
     return left === "" || right === "" || left === right;
+  }
+
+  private bindVerificationSessionDevice(session: MatrixVerificationSession): void {
+    const deviceId = this.readVerificationRequestIdentity(session.request).otherDeviceId;
+    if (!deviceId) {
+      return;
+    }
+    if (session.boundOtherDeviceId && session.boundOtherDeviceId !== deviceId) {
+      return;
+    }
+    session.boundOtherDeviceId = deviceId;
+  }
+
+  private canReplaceVerificationSessionRequest(
+    session: MatrixVerificationSession,
+    request: MatrixVerificationRequestLike,
+  ): boolean {
+    const deviceId = this.readVerificationRequestIdentity(request).otherDeviceId;
+    return !deviceId || !session.boundOtherDeviceId || session.boundOtherDeviceId === deviceId;
   }
 
   private pruneVerificationSessions(nowMs: number): void {
@@ -319,6 +341,7 @@ export class MatrixVerificationManager {
       hasReciprocateQr: Boolean(session.reciprocateQrCallbacks),
       completed: phase === VerificationPhase.Done,
       autoConfirmedSasWithoutTrust: session.sasAutoConfirmedWithoutTrust || undefined,
+      postSasTrustError: session.postSasTrustError,
       error: session.error,
       createdAt: new Date(session.createdAtMs).toISOString(),
       updatedAt: new Date(session.updatedAtMs).toISOString(),
@@ -493,6 +516,9 @@ export class MatrixVerificationManager {
     if (this.readRequestValue(session.request, () => session.request.initiatedByMe, true)) {
       return;
     }
+    if (!this.readRequestValue(session.request, () => session.request.isSelfVerification, false)) {
+      return;
+    }
     const callbacks = session.sasCallbacks ?? session.activeVerifier?.getShowSasCallbacks();
     if (!callbacks) {
       return;
@@ -506,14 +532,15 @@ export class MatrixVerificationManager {
       if (phase >= VerificationPhase.Cancelled) {
         return;
       }
+      if (
+        !this.readRequestValue(session.request, () => session.request.isSelfVerification, false)
+      ) {
+        return;
+      }
       session.sasAutoConfirmStarted = true;
       void this.confirmSasForSession(session, callbacks, { trustOwnDevice: false })
         .then(() => {
-          if (
-            this.readRequestValue(session.request, () => session.request.isSelfVerification, false)
-          ) {
-            session.sasAutoConfirmedWithoutTrust = true;
-          }
+          session.sasAutoConfirmedWithoutTrust = true;
           this.touchVerificationSession(session);
         })
         .catch((err) => {
@@ -530,7 +557,12 @@ export class MatrixVerificationManager {
   ): Promise<void> {
     await callbacks.confirm();
     if (opts.trustOwnDevice) {
-      await this.trustOwnDeviceAfterConfirmedSas(session);
+      try {
+        await this.trustOwnDeviceAfterConfirmedSas(session);
+        session.postSasTrustError = undefined;
+      } catch (err) {
+        session.postSasTrustError = formatMatrixErrorMessage(err);
+      }
     }
   }
 
@@ -555,11 +587,20 @@ export class MatrixVerificationManager {
     if (!this.readRequestValue(session.request, () => session.request.isSelfVerification, false)) {
       return;
     }
-    const deviceId = this.readRequestValue(
-      session.request,
-      () => session.request.otherDeviceId?.trim(),
-      "",
-    );
+    const currentDeviceId = this.readVerificationRequestIdentity(session.request).otherDeviceId;
+    if (
+      session.boundOtherDeviceId &&
+      currentDeviceId &&
+      session.boundOtherDeviceId !== currentDeviceId
+    ) {
+      throw new Error(
+        `Matrix verification device changed from ${session.boundOtherDeviceId} to ${currentDeviceId}; refusing to trust a different device after SAS confirmation`,
+      );
+    }
+    if (!session.boundOtherDeviceId && currentDeviceId) {
+      session.boundOtherDeviceId = currentDeviceId;
+    }
+    const deviceId = session.boundOtherDeviceId ?? "";
     if (!deviceId || !this.opts.trustOwnDeviceAfterSas) {
       return;
     }
@@ -578,6 +619,7 @@ export class MatrixVerificationManager {
     const requestObj = request as unknown as object;
     for (const existing of this.verificationSessions.values()) {
       if ((existing.request as unknown as object) === requestObj) {
+        this.bindVerificationSessionDevice(existing);
         this.touchVerificationSession(existing);
         return this.buildVerificationSummary(existing);
       }
@@ -585,8 +627,12 @@ export class MatrixVerificationManager {
     const txId = this.readVerificationRequestIdentity(request).transactionId;
     if (txId) {
       for (const existing of this.verificationSessions.values()) {
-        if (this.isSameLogicalVerificationRequest(existing.request, request)) {
+        if (
+          this.isSameLogicalVerificationRequest(existing.request, request) &&
+          this.canReplaceVerificationSessionRequest(existing, request)
+        ) {
           existing.request = request;
+          this.bindVerificationSessionDevice(existing);
           this.ensureVerificationRequestTracked(existing);
           const verifier = this.readRequestValue(request, () => request.verifier, null);
           if (verifier) {
@@ -611,6 +657,7 @@ export class MatrixVerificationManager {
       sasAutoConfirmStarted: false,
       sasAutoConfirmedWithoutTrust: false,
     };
+    this.bindVerificationSessionDevice(session);
     this.verificationSessions.set(session.id, session);
     this.ensureVerificationRequestTracked(session);
     this.maybeAutoAcceptInboundRequest(session);

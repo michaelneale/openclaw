@@ -321,6 +321,57 @@ describe("MatrixVerificationManager", () => {
     expect(trustOwnDeviceAfterSas).toHaveBeenCalledWith("OTHERDEVICE");
   });
 
+  it("reports post-SAS trust failures without failing SAS confirmation", async () => {
+    const { confirm, verifier } = createSasVerifierFixture({
+      decimal: [111, 222, 333],
+      emoji: [["cat", "cat"]],
+    });
+    const trustOwnDeviceAfterSas = vi.fn(async () => {
+      throw new Error("cross-sign unavailable");
+    });
+    const request = new MockVerificationRequest({
+      isSelfVerification: true,
+      otherDeviceId: "OTHERDEVICE",
+      transactionId: "txn-self-sas-trust-fails",
+      verifier,
+    });
+    const manager = new MatrixVerificationManager({ trustOwnDeviceAfterSas });
+    const tracked = manager.trackVerificationRequest(request);
+
+    await manager.startVerification(tracked.id, "sas");
+    const summary = await manager.confirmVerificationSas(tracked.id);
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(trustOwnDeviceAfterSas).toHaveBeenCalledWith("OTHERDEVICE");
+    expect(summary.postSasTrustError).toBe("cross-sign unavailable");
+    expect(summary.error).toBeUndefined();
+  });
+
+  it("refuses to cross-sign a device that differs from the SAS-bound device", async () => {
+    const { confirm, verifier } = createSasVerifierFixture({
+      decimal: [111, 222, 333],
+      emoji: [["cat", "cat"]],
+    });
+    const trustOwnDeviceAfterSas = vi.fn(async () => {});
+    const request = new MockVerificationRequest({
+      isSelfVerification: true,
+      otherDeviceId: "SASDEVICE",
+      transactionId: "txn-self-sas-device-change",
+      verifier,
+    });
+    const manager = new MatrixVerificationManager({ trustOwnDeviceAfterSas });
+    const tracked = manager.trackVerificationRequest(request);
+
+    await manager.startVerification(tracked.id, "sas");
+    request.otherDeviceId = "OTHERDEVICE";
+    const summary = await manager.confirmVerificationSas(tracked.id);
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(trustOwnDeviceAfterSas).not.toHaveBeenCalled();
+    expect(summary.postSasTrustError).toContain("refusing to trust a different device");
+    expect(summary.error).toBeUndefined();
+  });
+
   it("does not cross-sign non-self SAS verifications", async () => {
     const { verifier } = createSasVerifierFixture({
       decimal: [111, 222, 333],
@@ -504,6 +555,7 @@ describe("MatrixVerificationManager", () => {
     );
     const request = new MockVerificationRequest({
       transactionId: "txn-auto-confirm",
+      isSelfVerification: true,
       initiatedByMe: false,
       verifier,
     });
@@ -516,6 +568,30 @@ describe("MatrixVerificationManager", () => {
 
       await vi.advanceTimersByTimeAsync(1_100);
       expect(confirm).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not auto-confirm non-self inbound SAS", async () => {
+    vi.useFakeTimers();
+    const { confirm, verifier } = createSasVerifierFixture({
+      decimal: [6158, 1986, 3513],
+      emoji: [["gift", "Gift"]],
+    });
+    const request = new MockVerificationRequest({
+      transactionId: "txn-remote-auto-confirm",
+      isSelfVerification: false,
+      initiatedByMe: false,
+      verifier,
+    });
+    try {
+      const manager = new MatrixVerificationManager();
+      manager.trackVerificationRequest(request);
+
+      await vi.advanceTimersByTimeAsync(31_000);
+
+      expect(confirm).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }

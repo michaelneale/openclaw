@@ -573,6 +573,7 @@ type MatrixCliVerificationSummary = {
   hasSas: boolean;
   sas?: MatrixCliVerificationSas;
   completed: boolean;
+  postSasTrustError?: string;
   error?: string;
 };
 
@@ -819,6 +820,9 @@ function printMatrixVerificationSummary(summary: MatrixCliVerificationSummary): 
   }
   if (summary.error) {
     console.log(`Verification error: ${sanitizeMatrixCliText(summary.error)}`);
+  }
+  if (summary.postSasTrustError) {
+    console.log(`Post-SAS trust warning: ${sanitizeMatrixCliText(summary.postSasTrustError)}`);
   }
 }
 
