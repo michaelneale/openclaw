@@ -24,3 +24,9 @@ export MESH_LLM_API_KEY=mesh-llm-local
 Models are discovered dynamically from the mesh's `/v1/models` endpoint.
 Use `auto` as the model placeholder during setup — the mesh routes requests
 to the best available model automatically.
+
+## Context windows
+
+The plugin queries the mesh-llm management API (`http://localhost:3131/api/models`)
+to get real per-model context lengths from GGUF metadata. If the management
+API is unreachable the plugin falls back to the default 128k assumption.
