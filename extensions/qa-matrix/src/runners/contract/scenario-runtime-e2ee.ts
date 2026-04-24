@@ -317,12 +317,17 @@ async function writeMatrixQaCliOutputArtifacts(params: {
 
 async function assertMatrixQaPrivatePathMode(pathToCheck: string, label: string) {
   if (process.platform === "win32") {
-    return;
+    throw new Error(`${label} private permissions cannot be verified on Windows`);
   }
   const mode = (await stat(pathToCheck)).mode & 0o777;
   if ((mode & 0o077) !== 0) {
     throw new Error(`${label} permissions are too broad: ${mode.toString(8)}`);
   }
+}
+
+async function enforceMatrixQaPrivatePathMode(pathToCheck: string, label: string, mode: number) {
+  await chmod(pathToCheck, mode);
+  await assertMatrixQaPrivatePathMode(pathToCheck, label);
 }
 
 function assertMatrixQaCliSasMatches(params: {
@@ -399,14 +404,11 @@ async function createMatrixQaCliSelfVerificationRuntime(params: {
   );
   const stateDir = path.join(rootDir, "state");
   const configPath = path.join(rootDir, "config.json");
-  await chmod(rootDir, 0o700).catch(() => undefined);
-  await assertMatrixQaPrivatePathMode(rootDir, "Matrix QA CLI temp directory");
+  await enforceMatrixQaPrivatePathMode(rootDir, "Matrix QA CLI temp directory", 0o700);
   await mkdir(artifactDir, { mode: 0o700, recursive: true });
-  await chmod(artifactDir, 0o700).catch(() => undefined);
-  await assertMatrixQaPrivatePathMode(artifactDir, "Matrix QA CLI artifact directory");
+  await enforceMatrixQaPrivatePathMode(artifactDir, "Matrix QA CLI artifact directory", 0o700);
   await mkdir(stateDir, { mode: 0o700, recursive: true });
-  await chmod(stateDir, 0o700).catch(() => undefined);
-  await assertMatrixQaPrivatePathMode(stateDir, "Matrix QA CLI state directory");
+  await enforceMatrixQaPrivatePathMode(stateDir, "Matrix QA CLI state directory", 0o700);
   await writeFile(
     configPath,
     `${JSON.stringify(
@@ -437,7 +439,7 @@ async function createMatrixQaCliSelfVerificationRuntime(params: {
     )}\n`,
     { flag: "wx", mode: 0o600 },
   );
-  await assertMatrixQaPrivatePathMode(configPath, "Matrix QA CLI config file");
+  await enforceMatrixQaPrivatePathMode(configPath, "Matrix QA CLI config file", 0o600);
   const env = {
     ...requireMatrixQaCliRuntimeEnv(params.context),
     FORCE_COLOR: "0",

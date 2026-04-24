@@ -1674,7 +1674,7 @@ describe("MatrixClient crypto bootstrapping", () => {
       getSecretStorageStatus: vi.fn(async () => ({
         ready: true,
         defaultKeyId: "SSSSKEY",
-        secretStorageKeyValidityMap: {},
+        secretStorageKeyValidityMap: { SSSSKEY: true },
       })),
       getDeviceVerificationStatus: vi.fn(async () => ({
         isVerified: () => true,
@@ -1714,6 +1714,63 @@ describe("MatrixClient crypto bootstrapping", () => {
     expect(result.deviceOwnerVerified).toBe(true);
     expect(result.recoveryKeyStored).toBe(true);
     expect(fs.existsSync(recoveryKeyPath)).toBe(true);
+  });
+
+  it("does not persist a staged recovery key when secret storage validity is unknown", async () => {
+    const privateKey = new Uint8Array(Array.from({ length: 32 }, (_, i) => i + 1));
+    const encoded = encodeRecoveryKey(privateKey);
+
+    matrixJsClient.getUserId = vi.fn(() => "@bot:example.org");
+    matrixJsClient.getDeviceId = vi.fn(() => "DEVICE123");
+    let backupKeyLoaded = false;
+    matrixJsClient.getCrypto = vi.fn(() => ({
+      on: vi.fn(),
+      bootstrapCrossSigning: vi.fn(async () => {}),
+      bootstrapSecretStorage: vi.fn(consumeMatrixSecretStorageKey),
+      requestOwnUserVerification: vi.fn(async () => null),
+      getSecretStorageStatus: vi.fn(async () => ({
+        ready: true,
+        defaultKeyId: "SSSSKEY",
+        secretStorageKeyValidityMap: {},
+      })),
+      getDeviceVerificationStatus: vi.fn(async () => ({
+        isVerified: () => true,
+        localVerified: true,
+        crossSigningVerified: true,
+        signedByOwner: true,
+      })),
+      checkKeyBackupAndEnable: vi.fn(async () => {}),
+      loadSessionBackupPrivateKeyFromSecretStorage: vi.fn(async () => {
+        backupKeyLoaded = await consumeMatrixSecretStorageKey();
+      }),
+      getActiveSessionBackupVersion: vi.fn(async () => (backupKeyLoaded ? "11" : null)),
+      getSessionBackupPrivateKey: vi.fn(async () => (backupKeyLoaded ? privateKey : null)),
+      getKeyBackupInfo: vi.fn(async () => ({
+        algorithm: "m.megolm_backup.v1.curve25519-aes-sha2",
+        auth_data: {},
+        version: "11",
+      })),
+      isKeyBackupTrusted: vi.fn(async () => ({
+        trusted: true,
+        matchesDecryptionKey: true,
+      })),
+    }));
+
+    const recoveryDir = fs.mkdtempSync(path.join(os.tmpdir(), "matrix-sdk-verify-unknown-key-"));
+    const recoveryKeyPath = path.join(recoveryDir, "recovery-key.json");
+    const client = new MatrixClient("https://matrix.example.org", "token", {
+      encryption: true,
+      recoveryKeyPath,
+    });
+
+    const result = await client.verifyWithRecoveryKey(encoded as string);
+
+    expect(result.success).toBe(false);
+    expect(result.recoveryKeyAccepted).toBe(false);
+    expect(result.backupUsable).toBe(true);
+    expect(result.deviceOwnerVerified).toBe(true);
+    expect(result.recoveryKeyStored).toBe(false);
+    expect(fs.existsSync(recoveryKeyPath)).toBe(false);
   });
 
   it("fails recovery-key verification when the device lacks full cross-signing identity trust", async () => {
