@@ -5,6 +5,7 @@ import type { CoreConfig } from "../../types.js";
 import { formatMatrixEncryptionUnavailableError } from "../encryption-guidance.js";
 import type { MatrixDeviceVerificationStatus, MatrixOwnDeviceVerificationStatus } from "../sdk.js";
 import type { MatrixVerificationSummary } from "../sdk/verification-manager.js";
+import { sanitizeMatrixTerminalText } from "../terminal-sanitize.js";
 import { withResolvedActionClient, withStartedActionClient } from "./client.js";
 import type { MatrixActionClientOpts } from "./types.js";
 
@@ -118,6 +119,16 @@ function getMatrixVerificationSasWaitFailure(
   return null;
 }
 
+function formatMatrixVerificationCancellationMessage(
+  summary: MatrixVerificationSummary,
+  label: string,
+): string {
+  const error = summary.error ? sanitizeMatrixTerminalText(summary.error).trim() : "";
+  return `Matrix self-verification was cancelled${
+    error ? `: ${error}` : ` while waiting to ${label}`
+  }`;
+}
+
 async function waitForMatrixVerificationSummary(params: {
   crypto: MatrixCryptoActionFacade;
   label: string;
@@ -137,11 +148,7 @@ async function waitForMatrixVerificationSummary(params: {
         return found;
       }
       if (isMatrixVerificationCancelled(found)) {
-        throw new Error(
-          `Matrix self-verification was cancelled${
-            found.error ? `: ${found.error}` : ` while waiting to ${params.label}`
-          }`,
-        );
+        throw new Error(formatMatrixVerificationCancellationMessage(found, params.label));
       }
       const rejection = params.reject?.(found);
       if (rejection) {

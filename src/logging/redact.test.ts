@@ -18,6 +18,24 @@ describe("redactSensitiveText", () => {
     expect(output).toBe("OPENAI_API_KEY=sk-123…cdef");
   });
 
+  it("masks env assignments after punctuation delimiters", () => {
+    const input = "(OPENAI_API_KEY=sk-1234567890abcdef),MATRIX_ACCESS_TOKEN=abcdef1234567890ghij";
+    const output = redactSensitiveText(input, {
+      mode: "tools",
+      patterns: defaults,
+    });
+    expect(output).toBe("(OPENAI_API_KEY=sk-123…cdef),MATRIX_ACCESS_TOKEN=abcdef…ghij");
+  });
+
+  it("masks quoted env assignments with punctuation in the value", () => {
+    const input = 'OPENAI_API_KEY="sk-1234567890abcdef,with-suffix"';
+    const output = redactSensitiveText(input, {
+      mode: "tools",
+      patterns: defaults,
+    });
+    expect(output).toBe('OPENAI_API_KEY="sk-123…ffix"');
+  });
+
   it("masks CLI flags", () => {
     const input = "curl --token abcdef1234567890ghij https://api.test";
     const output = redactSensitiveText(input, {
@@ -43,6 +61,18 @@ describe("redactSensitiveText", () => {
       patterns: defaults,
     });
     expect(output).toBe('{"token":"abcdef…ghij"}');
+  });
+
+  it("masks access_token query parameters", () => {
+    const input =
+      "GET https://matrix.example/_matrix/client/v3/sync?access_token=abcdef1234567890ghij&timeout=30000";
+    const output = redactSensitiveText(input, {
+      mode: "tools",
+      patterns: defaults,
+    });
+    expect(output).toBe(
+      "GET https://matrix.example/_matrix/client/v3/sync?access_token=abcdef…ghij&timeout=30000",
+    );
   });
 
   it("masks bearer tokens", () => {

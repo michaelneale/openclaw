@@ -834,6 +834,34 @@ describe("matrix verification actions", () => {
     });
   });
 
+  it("sanitizes remote cancellation text before throwing", async () => {
+    const requested = {
+      completed: false,
+      hasSas: false,
+      id: "verification-1",
+      phaseName: "requested",
+      transactionId: "tx-self",
+    };
+    const cancelled = {
+      ...requested,
+      error: "Remote\u001B[31m cancelled\n\u009B31mforged\u202E",
+      pending: false,
+      phaseName: "cancelled",
+    };
+    const crypto = {
+      cancelVerification: vi.fn(async () => cancelled),
+      listVerifications: vi.fn(async () => [cancelled]),
+      requestVerification: vi.fn(async () => requested),
+    };
+    withStartedActionClientMock.mockImplementation(async (_opts, run) => {
+      return await run({ crypto });
+    });
+
+    await expect(
+      runMatrixSelfVerification({ confirmSas: vi.fn(async () => true), timeoutMs: 500 }),
+    ).rejects.toThrow("Matrix self-verification was cancelled: Remote cancelledforged");
+  });
+
   it("cancels the request when SAS mismatch submission fails", async () => {
     const sas = {
       completed: false,

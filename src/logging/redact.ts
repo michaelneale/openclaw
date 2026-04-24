@@ -14,8 +14,11 @@ const DEFAULT_REDACT_KEEP_START = 6;
 const DEFAULT_REDACT_KEEP_END = 4;
 
 const DEFAULT_REDACT_PATTERNS: string[] = [
+  // URL/query fields.
+  String.raw`\b(access_token=)([^&#\s"'<>]+)`,
   // ENV-style assignments.
-  String.raw`\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\b\s*[=:]\s*(["']?)([^\s"'\\]+)\1`,
+  String.raw`(^|[^?&\w])([A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\b\s*[=:]\s*)(["'])([^"'\\]+)\3`,
+  String.raw`(^|[^?&\w])([A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\b\s*[=:]\s*)([^\s"'\\,)\]}&]+)`,
   // JSON fields.
   String.raw`"(?:apiKey|token|secret|password|passwd|accessToken|refreshToken)"\s*:\s*"([^"]+)"`,
   // CLI flags.

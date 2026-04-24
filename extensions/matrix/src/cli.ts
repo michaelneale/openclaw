@@ -29,12 +29,14 @@ import { resolveMatrixConfigPath, updateMatrixAccountConfig } from "./matrix/con
 import { isOpenClawManagedMatrixDevice } from "./matrix/device-health.js";
 import type { MatrixDirectRoomCandidate } from "./matrix/direct-management.js";
 import { formatMatrixErrorMessage } from "./matrix/errors.js";
+import { sanitizeMatrixTerminalText } from "./matrix/terminal-sanitize.js";
 import { applyMatrixProfileUpdate, type MatrixProfileUpdateResult } from "./profile-update.js";
 import { getMatrixRuntime } from "./runtime.js";
 import { matrixSetupAdapter } from "./setup-core.js";
 import type { CoreConfig } from "./types.js";
 
 let matrixCliExitScheduled = false;
+const sanitizeMatrixCliText = sanitizeMatrixTerminalText;
 type MatrixActionClientModule = typeof import("./matrix/actions/client.js");
 type MatrixDirectManagementModule = typeof import("./matrix/direct-management.js");
 
@@ -683,102 +685,6 @@ function printVerificationTrustDiagnostics(status: {
   console.log(`Locally trusted: ${status.localVerified ? "yes" : "no"}`);
   console.log(`Cross-signing verified: ${status.crossSigningVerified ? "yes" : "no"}`);
   console.log(`Signed by owner: ${status.signedByOwner ? "yes" : "no"}`);
-}
-
-function sanitizeMatrixCliText(value: string): string {
-  let withoutAnsi = "";
-  for (let index = 0; index < value.length; index++) {
-    const code = value.charCodeAt(index);
-    if (code === 0x9b) {
-      index++;
-      while (index < value.length && !isAnsiFinalByte(value.charCodeAt(index))) {
-        index++;
-      }
-      continue;
-    }
-    if (code === 0x9d) {
-      index++;
-      while (index < value.length) {
-        const current = value.charCodeAt(index);
-        if (current === 0x07 || current === 0x9c) {
-          break;
-        }
-        if (current === 0x1b && value[index + 1] === "\\") {
-          index++;
-          break;
-        }
-        index++;
-      }
-      continue;
-    }
-    if (code === 0x90 || code === 0x9e || code === 0x9f) {
-      index++;
-      while (index < value.length) {
-        const current = value.charCodeAt(index);
-        if (current === 0x07 || current === 0x9c) {
-          break;
-        }
-        if (current === 0x1b && value[index + 1] === "\\") {
-          index++;
-          break;
-        }
-        index++;
-      }
-      continue;
-    }
-    if (code !== 0x1b) {
-      withoutAnsi += value[index];
-      continue;
-    }
-
-    const marker = value[index + 1];
-    if (marker === "[") {
-      index += 2;
-      while (index < value.length && !isAnsiFinalByte(value.charCodeAt(index))) {
-        index++;
-      }
-      continue;
-    }
-    if (marker === "]") {
-      index += 2;
-      while (index < value.length) {
-        const current = value.charCodeAt(index);
-        if (current === 0x07) {
-          break;
-        }
-        if (current === 0x1b && value[index + 1] === "\\") {
-          index++;
-          break;
-        }
-        index++;
-      }
-      continue;
-    }
-    index++;
-  }
-
-  let sanitized = "";
-  for (const character of withoutAnsi) {
-    const code = character.charCodeAt(0);
-    if (!isUnsafeMatrixCliTerminalCode(code)) {
-      sanitized += character;
-    }
-  }
-  return sanitized;
-}
-
-function isUnsafeMatrixCliTerminalCode(code: number): boolean {
-  return (
-    code < 0x20 ||
-    code === 0x7f ||
-    (code >= 0x80 && code <= 0x9f) ||
-    (code >= 0x202a && code <= 0x202e) ||
-    (code >= 0x2066 && code <= 0x2069)
-  );
-}
-
-function isAnsiFinalByte(code: number): boolean {
-  return code >= 0x40 && code <= 0x7e;
 }
 
 function formatMatrixCliSasEmoji(emoji: NonNullable<MatrixCliVerificationSas["emoji"]>): string {
