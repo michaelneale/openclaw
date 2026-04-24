@@ -1,0 +1,25 @@
+{
+  "id": "mesh-llm",
+  "enabledByDefault": true,
+  "providers": ["mesh-llm"],
+  "providerAuthEnvVars": {
+    "mesh-llm": ["MESH_LLM_API_KEY"]
+  },
+  "providerAuthChoices": [
+    {
+      "provider": "mesh-llm",
+      "method": "custom",
+      "choiceId": "mesh-llm",
+      "choiceLabel": "Mesh LLM",
+      "choiceHint": "Distributed GPU mesh · OpenAI-compatible",
+      "groupId": "mesh-llm",
+      "groupLabel": "Mesh LLM",
+      "groupHint": "Distributed GPU mesh"
+    }
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

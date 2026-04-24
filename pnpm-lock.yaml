@@ -837,6 +837,12 @@ importers:
         specifier: workspace:*
         version: link:../..
 
+  extensions/mesh-llm:
+    devDependencies:
+      '@openclaw/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+
   extensions/microsoft:
     dependencies:
       node-edge-tts:

@@ -310,6 +310,10 @@
   - changed-files:
       - any-glob-to-any-file:
           - "extensions/lmstudio/**"
+"extensions: mesh-llm":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "extensions/mesh-llm/**"
 "extensions: openai":
   - changed-files:
       - any-glob-to-any-file:
