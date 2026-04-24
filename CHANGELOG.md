@@ -6,6 +6,7 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Diagnostics/OTEL: export run, model-call, and tool-execution diagnostic lifecycle events as OTEL spans with trace parenting, without retaining live span state. Thanks @vincentkoc.
 - Plugins/activation: expose activation plan reasons and a richer plan API so callers can inspect why a plugin was selected while preserving existing id-list activation behavior. (#70943) Thanks @vincentkoc.
 - Plugins/source metadata: expose normalized install-source facts on provider and channel catalogs so onboarding can explain npm pinning, integrity state, and local availability before runtime loads. (#70951) Thanks @vincentkoc.
 - Plugins/catalog: pin the official external WeCom channel source to an exact npm release plus dist integrity, with a guard that official external sources stay integrity-pinned. (#70997) Thanks @vincentkoc.
