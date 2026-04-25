@@ -15,6 +15,7 @@ export const providerExtensionIds = [
   "huggingface",
   "kimi-coding",
   "lmstudio",
+  "mesh-llm",
   "microsoft",
   "microsoft-foundry",
   "minimax",
