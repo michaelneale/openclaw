@@ -1,21 +1,17 @@
 import {
   definePluginEntry,
   type OpenClawPluginApi,
-  type ProviderAuthMethodNonInteractiveContext,
+  type ProviderDiscoveryContext,
 } from "openclaw/plugin-sdk/plugin-entry";
 import {
   buildMeshLlmProvider,
-  MESH_LLM_DEFAULT_API_KEY_ENV_VAR,
+  MESH_LLM_DEFAULT_API_KEY,
   MESH_LLM_DEFAULT_BASE_URL,
   MESH_LLM_MODEL_PLACEHOLDER,
   MESH_LLM_PROVIDER_LABEL,
 } from "./api.js";
 
 const PROVIDER_ID = "mesh-llm";
-
-async function loadProviderSetup() {
-  return await import("openclaw/plugin-sdk/provider-setup");
-}
 
 export default definePluginEntry({
   id: "mesh-llm",
@@ -26,33 +22,21 @@ export default definePluginEntry({
       id: PROVIDER_ID,
       label: "Mesh LLM",
       docsPath: "/providers/mesh-llm",
-      envVars: ["MESH_LLM_API_KEY"],
       auth: [
         {
-          id: "custom",
+          id: "local",
           label: MESH_LLM_PROVIDER_LABEL,
           hint: "Distributed GPU mesh · OpenAI-compatible",
           kind: "custom",
           run: async (ctx) => {
-            const providerSetup = await loadProviderSetup();
+            const providerSetup = await import("openclaw/plugin-sdk/provider-setup");
             return await providerSetup.promptAndConfigureOpenAICompatibleSelfHostedProviderAuth({
               cfg: ctx.config,
               prompter: ctx.prompter,
               providerId: PROVIDER_ID,
               providerLabel: MESH_LLM_PROVIDER_LABEL,
               defaultBaseUrl: MESH_LLM_DEFAULT_BASE_URL,
-              defaultApiKeyEnvVar: MESH_LLM_DEFAULT_API_KEY_ENV_VAR,
-              modelPlaceholder: MESH_LLM_MODEL_PLACEHOLDER,
-            });
-          },
-          runNonInteractive: async (ctx: ProviderAuthMethodNonInteractiveContext) => {
-            const providerSetup = await loadProviderSetup();
-            return await providerSetup.configureOpenAICompatibleSelfHostedProviderNonInteractive({
-              ctx,
-              providerId: PROVIDER_ID,
-              providerLabel: MESH_LLM_PROVIDER_LABEL,
-              defaultBaseUrl: MESH_LLM_DEFAULT_BASE_URL,
-              defaultApiKeyEnvVar: MESH_LLM_DEFAULT_API_KEY_ENV_VAR,
+              defaultApiKeyEnvVar: undefined,
               modelPlaceholder: MESH_LLM_MODEL_PLACEHOLDER,
             });
           },
@@ -60,8 +44,8 @@ export default definePluginEntry({
       ],
       discovery: {
         order: "late",
-        run: async (ctx) => {
-          const providerSetup = await loadProviderSetup();
+        run: async (ctx: ProviderDiscoveryContext) => {
+          const providerSetup = await import("openclaw/plugin-sdk/provider-setup");
           return await providerSetup.discoverOpenAICompatibleSelfHostedProvider({
             ctx,
             providerId: PROVIDER_ID,
@@ -77,18 +61,24 @@ export default definePluginEntry({
           groupId: "mesh-llm",
           groupLabel: "Mesh LLM",
           groupHint: "Distributed GPU mesh",
-          methodId: "custom",
+          methodId: "local",
         },
         modelPicker: {
           label: "Mesh LLM (auto-discover)",
           hint: "Detect models from a local or remote Mesh LLM node",
-          methodId: "custom",
+          methodId: "local",
         },
       },
+      resolveSyntheticAuth: () => ({
+        apiKey: MESH_LLM_DEFAULT_API_KEY,
+        source: "mesh-llm (synthetic local key)",
+        mode: "api-key",
+      }),
+      shouldDeferSyntheticProfileAuth: ({ resolvedApiKey }) =>
+        resolvedApiKey?.trim() === MESH_LLM_DEFAULT_API_KEY,
       buildUnknownModelHint: () =>
-        "Mesh LLM requires authentication to be registered as a provider. " +
-        'Set MESH_LLM_API_KEY (any value works) or run "openclaw configure". ' +
-        "See: https://docs.openclaw.ai/providers/mesh-llm",
+        "Mesh LLM auto-discovers models from a running mesh-llm node. " +
+        "Start mesh-llm with: mesh-llm --client --auto",
     });
   },
 });

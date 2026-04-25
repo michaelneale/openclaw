@@ -2,13 +2,12 @@
   "id": "mesh-llm",
   "enabledByDefault": true,
   "providers": ["mesh-llm"],
-  "providerAuthEnvVars": {
-    "mesh-llm": ["MESH_LLM_API_KEY"]
-  },
+  "syntheticAuthRefs": ["mesh-llm"],
+  "nonSecretAuthMarkers": ["mesh-llm-local"],
   "providerAuthChoices": [
     {
       "provider": "mesh-llm",
-      "method": "custom",
+      "method": "local",
       "choiceId": "mesh-llm",
       "choiceLabel": "Mesh LLM",
       "choiceHint": "Distributed GPU mesh · OpenAI-compatible",

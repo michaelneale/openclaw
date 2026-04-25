@@ -6,19 +6,18 @@ Mesh LLM pools GPUs across machines and exposes the result as one
 OpenAI-compatible API at `http://localhost:9337/v1`. Models are
 auto-discovered — whatever the mesh is serving appears in the model list.
 
+No API key is needed. The plugin uses synthetic auth internally.
+
 ## Quick start
 
 ```bash
-# Start a mesh-llm node (installs automatically)
-curl -fsSL https://raw.githubusercontent.com/Mesh-LLM/mesh-llm/main/install.sh | bash
-mesh-llm serve --auto
+# Start a mesh-llm node (client-only, no GPU contribution)
+mesh-llm --client --auto
 
-# Configure OpenClaw to use it
+# OpenClaw will auto-discover models from the running node.
+# Or configure explicitly:
 openclaw configure
 # → choose "Mesh LLM"
-
-# Or set the env var directly
-export MESH_LLM_API_KEY=mesh-llm-local
 ```
 
 Models are discovered dynamically from the mesh's `/v1/models` endpoint.
