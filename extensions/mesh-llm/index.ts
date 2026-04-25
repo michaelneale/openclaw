@@ -76,6 +76,12 @@ export default definePluginEntry({
       }),
       shouldDeferSyntheticProfileAuth: ({ resolvedApiKey }) =>
         resolvedApiKey?.trim() === MESH_LLM_DEFAULT_API_KEY,
+      matchesContextOverflowError: ({ errorMessage }) =>
+        /\b(?:context|n_ctx|ctx)\b.*\b(?:exceed|overflow|too long|too many|limit)/i.test(
+          errorMessage,
+        ) ||
+        /\bexceeds? the available context size\b/i.test(errorMessage) ||
+        /\bprompt.*tokens.*exceed/i.test(errorMessage),
       buildUnknownModelHint: () =>
         "Mesh LLM auto-discovers models from a running mesh-llm node. " +
         "Start mesh-llm with: mesh-llm --client --auto",
