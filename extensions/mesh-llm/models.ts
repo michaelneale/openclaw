@@ -39,9 +39,12 @@ async function fetchManagementContextLengths(baseUrl: string): Promise<Map<strin
       signal: AbortSignal.timeout(3000),
     });
     if (!response.ok) return map;
-    const payload = (await response.json()) as MeshLlmModelPayload[];
-    if (!Array.isArray(payload)) return map;
-    for (const model of payload) {
+    const payload = (await response.json()) as
+      | MeshLlmModelPayload[]
+      | { mesh_models: MeshLlmModelPayload[] };
+    const models = Array.isArray(payload) ? payload : payload?.mesh_models;
+    if (!Array.isArray(models)) return map;
+    for (const model of models) {
       if (model.name && typeof model.context_length === "number" && model.context_length > 0) {
         map.set(model.name, model.context_length);
       }
